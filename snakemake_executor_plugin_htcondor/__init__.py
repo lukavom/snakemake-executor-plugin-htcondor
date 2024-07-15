@@ -171,12 +171,15 @@ class Executor(RemoteExecutor):
             submit_dict["should_transfer_files"] = "YES"
             submit_dict["when_to_transfer_output"] = "ON_EXIT"
 
+            # Add the snakefile to the transfer list
+            submit_dict["transfer_input_files"] = abspath(self.get_snakefile())
+
             if job.input:
                 # When snakemake passes its input args to the executable, it does so using the path relative
                 # to the specified input directory, e.g. `input/foo/bar`, so we need to transfer the top-most
                 # input directories the will contain any subdirectories/files needed by the job.
                 top_most_input_directories = {path.split(sep)[0] for path in job.input}
-                submit_dict["transfer_input_files"] = ", ".join(sorted(top_most_input_directories))
+                submit_dict["transfer_input_files"] += ", " + ", ".join(sorted(top_most_input_directories))
 
             if self.workflow.configfiles:
                 # Note that when we transfer the config file(s), we'll pass Condor an absolute path, but we need to
@@ -191,10 +194,7 @@ class Executor(RemoteExecutor):
                 configfiles_pattern = r"--configfiles .*?(?=( --|$))"
                 submit_dict["arguments"] = re.sub(configfiles_pattern, f"--configfiles {config_arg}", submit_dict["arguments"])
 
-                if submit_dict["transfer_input_files"]:
-                    submit_dict["transfer_input_files"] += ", " + ", ".join(str(path) for path in self.workflow.configfiles)
-                else:
-                    submit_dict["transfer_input_files"] = ", ".join(str(path) for path in self.workflow.configfiles)
+                submit_dict["transfer_input_files"] += ", " + ", ".join(str(path) for path in self.workflow.configfiles)
 
             if job.output:
                 # For outputs, we only care about the parent directory, which we'll tell
