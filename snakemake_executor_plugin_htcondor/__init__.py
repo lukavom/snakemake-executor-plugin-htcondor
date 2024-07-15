@@ -132,7 +132,6 @@ class Executor(RemoteExecutor):
                 top_most_input_directories = {path.split(sep)[0] for path in job.input}
                 submit_dict["transfer_input_files"] = ", ".join(sorted(top_most_input_directories))
 
-
             if self.workflow.configfiles:
                 # Note that when we transfer the config file(s), we'll pass Condor an absolute path, but we need to
                 # modify the job args to use only the file name(s) when execution begins, because the configfile(s)
