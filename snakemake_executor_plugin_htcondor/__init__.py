@@ -33,6 +33,22 @@ class ExecutorSettings(ExecutorSettingsBase):
         },
     )
 
+    universe: Optional[str] = field(
+        default="vanilla",
+        metadata={
+            "help": "The HTCondor universe to be used by HTCondor jobs",
+            "required": False,
+        },
+    )
+
+    container_image: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The container image to be used by container universe jobs",
+            "required": False,
+        },
+    )
+
 
 # Required:
 # Specify common settings shared by various executors.
@@ -74,6 +90,15 @@ class Executor(RemoteExecutor):
 
         # jobDir: Directory where the job will tore log, output and error files.
         self.jobDir = self.workflow.executor_settings.jobdir
+        # universe: The HTCondor universe to be used by HTCondor jobs
+        self.universe = self.workflow.executor_settings.universe
+        if self.universe not in ["vanilla", "docker", "container", "scheduler", "local", "parallel", "grid", "java", "parallel", "vm"]:
+            raise WorkflowError(
+                f"The universe {self.universe} is not supported by HTCondor.",
+                "See the HTCondor reference manual for a list of supported universes."
+            )
+        # container_image: When universe == container or docker, this image is used by each job
+        self.container_image = self.workflow.executor_settings.container_image
 
     def run_job(self, job: JobExecutorInterface):
         # Submitting job to HTCondor
@@ -95,12 +120,21 @@ class Executor(RemoteExecutor):
         # Creating submit dictionary which is passed to htcondor.Submit
         submit_dict = {
             "executable": job_exec,
+            "universe": self.universe,
             "arguments": job_args,
             "log": join(self.jobDir, "$(ClusterId).log"),
             "output": join(self.jobDir, "$(ClusterId).out"),
             "error": join(self.jobDir, "$(ClusterId).err"),
             "request_cpus": str(job.threads),
         }
+
+        # Set container image if universe is container or docker
+        if self.universe in ["container", "docker"]:
+            if self.container_image == None:
+                raise WorkflowError(
+                    "A container image must be specified when using container or docker universes."
+                )
+            submit_dict["container_image"] = self.container_image
 
         # Basic commands
         if job.resources.get("getenv"):
