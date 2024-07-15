@@ -91,6 +91,22 @@ common_settings = CommonSettings(
     can_transfer_local_files=True,
 )
 
+def get_creds() -> bool:
+    """
+    Get credentials to avoid job going on hold due to lack of credentials
+    """
+    # thanks @tlmiller
+    local_provider_name = htcondor.param.get("LOCAL_CREDMON_PROVIDER_NAME")
+    if local_provider_name is None:
+        return False
+    magic = ("LOCAL:%s" % local_provider_name).encode()
+    credd = htcondor.Credd()
+    credd.add_user_cred(htcondor.CredTypes.Kerberos, magic)
+    return True
+
+
+class CredsError(Exception):
+    pass
 
 # Required:
 # Implementation of your executor
@@ -152,6 +168,9 @@ class Executor(RemoteExecutor):
         # If we're not using a shared filesystem, we need to setup transfers
         # for any job wrapper, config files, input files, etc
         if not self.workflow.storage_settings.shared_fs_usage:
+            submit_dict["should_transfer_files"] = "YES"
+            submit_dict["when_to_transfer_output"] = "ON_EXIT"
+
             if job.input:
                 # When snakemake passes its input args to the executable, it does so using the path relative
                 # to the specified input directory, e.g. `input/foo/bar`, so we need to transfer the top-most
@@ -242,7 +261,12 @@ class Executor(RemoteExecutor):
 
         # Submitting job to HTCondor
         try:
+            have_creds = get_creds()
+            if not have_creds:
+                raise CredsError("Credentials not found for this workflow")
             submit_result = schedd.submit(submit_description)
+        except CredsError as ce:
+            print(f"CredsError occurred: {ce}")
         except Exception as e:
             raise WorkflowError(f"Failed to submit HTCondor job: {e}")
 
