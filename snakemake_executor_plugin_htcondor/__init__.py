@@ -144,6 +144,9 @@ class Executor(RemoteExecutor):
             if job.resources.get(key):
                 submit_dict[key] = job.resources.get(key)
 
+        # Name the jobs in the queue something that tells us what the job is
+        submit_dict["batch_name"] = f"{job.name}-{job.jobid}"
+
         # HTCondor submit description
         self.logger.debug(f"HTCondor submit subscription: {submit_dict}")
         submit_description = htcondor.Submit(submit_dict)
