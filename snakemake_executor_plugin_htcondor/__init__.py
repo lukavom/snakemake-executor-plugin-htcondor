@@ -12,6 +12,7 @@ from snakemake_interface_executor_plugins.jobs import (
 from snakemake_interface_common.exceptions import WorkflowError  # noqa
 
 import htcondor
+import traceback
 from os.path import join, basename, abspath, dirname
 from os import makedirs, sep
 import re
@@ -269,8 +270,10 @@ class Executor(RemoteExecutor):
                 raise CredsError("Credentials not found for this workflow")
             submit_result = schedd.submit(submit_description)
         except CredsError as ce:
+            traceback.print_exc()
             print(f"CredsError occurred: {ce}")
         except Exception as e:
+            traceback.print_exc()
             raise WorkflowError(f"Failed to submit HTCondor job: {e}")
 
         self.logger.info(
