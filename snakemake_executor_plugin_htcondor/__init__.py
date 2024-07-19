@@ -35,33 +35,6 @@ class ExecutorSettings(ExecutorSettingsBase):
         },
     )
 
-    universe: Optional[str] = field(
-        default="vanilla",
-        metadata={
-            "help": "The HTCondor universe to be used by HTCondor jobs",
-            "required": False,
-        },
-    )
-
-    container_image: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "The container image to be used by container universe jobs",
-            "required": False,
-        },
-    )
-      
-    jobwrapper: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "A job wrapper script that can be used for remote environment "
-            "setup and teardown. The script must pass any provided arguments to the "
-            "executable, e.g. `python3 -m snakemake $@`.",
-            "required": False,
-        },
-    )
-
-
 # Required:
 # Specify common settings shared by various executors.
 common_settings = CommonSettings(
@@ -120,17 +93,6 @@ class Executor(RemoteExecutor):
 
         # jobDir: Directory where the job will tore log, output and error files.
         self.jobDir = self.workflow.executor_settings.jobdir
-        # universe: The HTCondor universe to be used by HTCondor jobs
-        self.universe = self.workflow.executor_settings.universe
-        if self.universe not in ["vanilla", "docker", "container", "scheduler", "local", "parallel", "grid", "java", "parallel", "vm"]:
-            raise WorkflowError(
-                f"The universe {self.universe} is not supported by HTCondor.",
-                "See the HTCondor reference manual for a list of supported universes."
-            )
-        # container_image: When universe == container or docker, this image is used by each job
-        self.container_image = self.workflow.executor_settings.container_image
-        # A wrapper that can be used for environment setup/teardown. Must pass args to snakemake
-        self.jobWrapper = self.workflow.executor_settings.jobwrapper
 
     def run_job(self, job: JobExecutorInterface):
         # Submitting job to HTCondor
@@ -138,8 +100,8 @@ class Executor(RemoteExecutor):
         # Creating directory to store log, output and error files
         makedirs(self.jobDir, exist_ok=True)
 
-        if self.jobWrapper:
-            job_exec = basename(self.jobWrapper)
+        if (jobWrapper := job.resources.get("job_wrapper")):
+            job_exec = basename(jobWrapper)
             # The wrapper script will take as input all snakemake arguments, so we assume
             # it contains something like `snakemake $@`
             job_args = self.format_job_exec(job).removeprefix("python -m snakemake ")
@@ -158,13 +120,32 @@ class Executor(RemoteExecutor):
         # Creating submit dictionary which is passed to htcondor.Submit
         submit_dict = {
             "executable": job_exec,
-            "universe": self.universe,
             "arguments": job_args,
             "log": join(self.jobDir, "$(ClusterId).log"),
             "output": join(self.jobDir, "$(ClusterId).out"),
             "error": join(self.jobDir, "$(ClusterId).err"),
             "request_cpus": str(job.threads),
         }
+
+
+        # Supported universes for HTCondor
+        supported_universes = ["vanilla", "docker", "container", "scheduler", "local", "parallel", "grid", "java", "vm"]
+        if (universe := job.resources.get("universe")):
+            if universe not in supported_universes:
+                raise WorkflowError(
+                    f"The universe {universe} is not supported by HTCondor.",
+                    "See the HTCondor reference manual for a list of supported universes."
+                )
+
+            submit_dict["universe"] = universe
+
+            # Check for container image requirement
+            container_image = job.resources.get("container_image")
+            if universe in ["docker", "container"] and not container_image:
+                raise WorkflowError("A container image must be specified when using the docker or container universe.")
+            elif container_image:
+                submit_dict["container_image"] = container_image
+
 
         # If we're not using a shared filesystem, we need to setup transfers
         # for any job wrapper, config files, input files, etc
@@ -202,14 +183,6 @@ class Executor(RemoteExecutor):
                 # HTCondor to transfer back to the AP.
                 top_most_output_directories = {path.split(sep)[0] for path in job.output}
                 submit_dict["transfer_output_files"] = ", ".join(sorted(top_most_output_directories))
-
-        # Set container image if universe is container or docker
-        if self.universe in ["container", "docker"]:
-            if self.container_image == None:
-                raise WorkflowError(
-                    "A container image must be specified when using container or docker universes."
-                )
-            submit_dict["container_image"] = self.container_image
 
         # Basic commands
         if job.resources.get("getenv"):
