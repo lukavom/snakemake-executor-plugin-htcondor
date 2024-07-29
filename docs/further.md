@@ -58,3 +58,54 @@ any Snakefile/Config file declarations. That is, if your configuration yaml file
 the same location the job is submitted from, and it must arrive at the EP as `my_data/`. Because of this, a configured input directory like `../../my_data/`
 cannot work, because Snakemake at the EP will attempt to find `../../my_data` on its own filesystem where the directory will have been flattened to
 `my_data/`.
+
+### Example of Non Shared Filesystem Usage
+
+Given a directory structure on the AP such as:
+```
+.
+└── MyHTCondorWorkflow/
+    ├── Snakefile
+    ├── my_config.yaml
+    ├── runtime_container.sif
+    ├── wrapper.sh
+    ├── my_input/
+    │   ├── file1.txt
+    │   └── file2.txt
+    ├── my_profile/
+    │   └── config.yaml
+    └── logs/
+```
+
+with `wrapper.sh` as:
+```bash
+#!/bin/bash
+set -e
+export HOME=$(pwd)
+snakemake "$@"
+```
+and where `runtime_container.sif` is an apptainer image containing Snakemake and any additional software needed by your job, you can setup
+`profile/config.yaml` with something like:
+```yaml
+# Run at most 30 concurrent jobs
+jobs: 30
+executor: htcondor
+configfile: my_config.yaml
+shared-fs-usage: none
+htcondor-job-dir: /path/to/MyHTCondorWorkflow/logs
+default-resources:
+  job_wrapper: "wrapper.sh"
+  container_image: "runtime_container.sif"
+  universe: "container"
+  request_disk: "16GB"
+  request_memory: "8GB"
+```
+
+Now, if `my_config.yaml` declares `my_input/` as its input data, then the following snakemake command should start the workflow from the AP,
+sending each job to a remote EP:
+```bash
+snakemake --profile my_profile
+```
+with HTCondor job logs being placed in `MyHTCondorWorkflow/logs/`
+
+Note that exiting the terminal running the Snakemake workflow will currently abort all jobs.
