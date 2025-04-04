@@ -11,7 +11,7 @@ from snakemake_interface_executor_plugins.jobs import (
 )
 from snakemake_interface_common.exceptions import WorkflowError  # noqa
 
-import htcondor
+import htcondor2 as htcondor
 import traceback
 from os.path import join, basename, abspath, dirname
 from os import makedirs, sep
@@ -64,23 +64,6 @@ common_settings = CommonSettings(
     # indicate that the HTCondor executor can transfer its own files to the remote node
     can_transfer_local_files=True,
 )
-
-def get_creds() -> bool:
-    """
-    Get credentials to avoid job going on hold due to lack of credentials
-    """
-    # thanks @tlmiller
-    local_provider_name = htcondor.param.get("LOCAL_CREDMON_PROVIDER_NAME")
-    if local_provider_name is None:
-        return False
-    magic = ("LOCAL:%s" % local_provider_name).encode()
-    credd = htcondor.Credd()
-    credd.add_user_cred(htcondor.CredTypes.Kerberos, magic)
-    return True
-
-
-class CredsError(Exception):
-    pass
 
 # Required:
 # Implementation of your executor
@@ -244,13 +227,8 @@ class Executor(RemoteExecutor):
 
         # Submitting job to HTCondor
         try:
-            have_creds = get_creds()
-            if not have_creds:
-                raise CredsError("Credentials not found for this workflow")
+            submit_description.issue_credentials()
             submit_result = schedd.submit(submit_description)
-        except CredsError as ce:
-            traceback.print_exc()
-            print(f"CredsError occurred: {ce}")
         except Exception as e:
             traceback.print_exc()
             raise WorkflowError(f"Failed to submit HTCondor job: {e}")
@@ -296,8 +274,11 @@ class Executor(RemoteExecutor):
                                 "JobStatus",
                             ],
                         )
-                        #  Storing the one event from HistoryIterator to list
-                        job_status = [next(job_status)]
+                        #  Storing the one event from history list
+                        if job_status and len(job_status) >= 1:
+                            job_status = [job_status[0]]
+                        else:
+                            raise ValueError(f"No job status found in history for HTCondor job with Cluster ID {current_job.external_jobid}.")
                 except Exception as e:
                     self.logger.warning(f"Failed to retrieve HTCondor job status: {e}")
                     # Assuming the job is still running and retry next time
