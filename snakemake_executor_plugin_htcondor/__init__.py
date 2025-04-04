@@ -221,13 +221,13 @@ class Executor(RemoteExecutor):
         # HTCondor submit description
         self.logger.debug(f"HTCondor submit subscription: {submit_dict}")
         submit_description = htcondor.Submit(submit_dict)
-        submit_description.issue_credentials()
 
         # Client for HTCondor Schedduler
         schedd = htcondor.Schedd()
 
         # Submitting job to HTCondor
         try:
+            submit_description.issue_credentials()
             submit_result = schedd.submit(submit_description)
         except Exception as e:
             traceback.print_exc()
