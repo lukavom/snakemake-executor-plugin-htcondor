@@ -215,7 +215,7 @@ class Executor(RemoteExecutor):
         # Check any custom classads
         for key in job.resources.keys():
             if key.startswith("classad_"):
-                classad_key = key.removeprefix("classad_") + "+"
+                classad_key =  "+" + key.removeprefix("classad_")
                 submit_dict[classad_key] = job.resources.get(key)
 
         # HTCondor submit description
