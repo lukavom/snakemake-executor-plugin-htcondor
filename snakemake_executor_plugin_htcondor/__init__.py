@@ -84,7 +84,7 @@ class Executor(RemoteExecutor):
         makedirs(self.jobDir, exist_ok=True)
 
         if (jobWrapper := job.resources.get("job_wrapper")):
-            job_exec = basename(jobWrapper)
+            job_exec = jobWrapper
             # The wrapper script will take as input all snakemake arguments, so we assume
             # it contains something like `snakemake $@`
             job_args = self.format_job_exec(job).removeprefix("python -m snakemake ")
