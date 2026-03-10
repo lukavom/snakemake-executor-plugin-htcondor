@@ -2,6 +2,23 @@
 requires = [ "poetry-core",]
 build-backend = "poetry.core.masonry.api"
 
+[project]
+name = "snakemake-executor-plugin-htcondor"
+version = "0.2.0"
+description = "A Snakemake executor plugin for submitting jobs to an HTCondor cluster."
+authors = [ { name = "Jannis Speer", email = "jannis.speer@tutanota.com" }, { name = "Justin Hiemstra", email = "jhiemstra@wisc.edu" } ]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "snakemake-interface-common>=1.17.1",
+    "snakemake-interface-executor-plugins>=9.0.0",
+    "htcondor>=24.5.1",
+]
+
+[project.urls]
+repository = "https://github.com/htcondor/snakemake-executor-plugin-htcondor"
+documentation = "https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/htcondor.html"
+
 [tool.poetry]
 name = "snakemake-executor-plugin-htcondor"
 version = "0.2.0"
